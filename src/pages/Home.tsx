@@ -205,8 +205,12 @@ export function Home() {
         </div>
       </section>
 
-      <section ref={servicesAnimation.ref} id="services" className="bg-gray-50 py-20">
-        <div className="container mx-auto px-6">
+      <section ref={servicesAnimation.ref} id="services" className="relative py-20 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-blue-gray-50 to-gray-100"></div>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-radial from-blue-400/20 via-slate-400/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-gradient-radial from-cyan-400/15 via-blue-gray-400/10 to-transparent rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s', animationDuration: '4s' }}></div>
+        <div className="absolute top-1/2 right-1/3 w-64 h-64 bg-gradient-radial from-teal-300/10 via-slate-300/5 to-transparent rounded-full blur-2xl animate-pulse" style={{ animationDelay: '2s', animationDuration: '5s' }}></div>
+        <div className="container mx-auto px-6 relative z-10">
           <h2 className={`text-3xl font-bold text-[#3d4f5c] mb-12 text-center transition-all duration-700 ${servicesAnimation.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>Our Services</h2>
           {servicesLoading ? (
             <div className="text-center py-12">
