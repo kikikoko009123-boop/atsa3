@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { doc, setDoc, updateDoc, deleteDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useServices } from '../hooks/useServices';
 import { useMaterials } from '../hooks/useMaterials';
 import { useHeroContent } from '../hooks/useHeroContent';
-import { Edit2, Trash2, Plus, Save, X, Zap, Shield, CheckCircle } from 'lucide-react';
+import { uploadToPostimages } from '../services/postimagesUpload';
+import { Edit2, Trash2, Plus, Save, X, Zap, Shield, CheckCircle, Upload, Image as ImageIcon } from 'lucide-react';
 
 export function AdminContentEditor() {
   const { services, loading: servicesLoading } = useServices();
@@ -21,8 +22,12 @@ export function AdminContentEditor() {
     description: '',
     imageUrl: '',
     icon: 'CheckCircle',
+    iconPhotoUrl: '',
     orderIndex: 0
   });
+
+  const iconFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
@@ -55,7 +60,7 @@ export function AdminContentEditor() {
       }
       setShowServiceModal(false);
       setEditingService(null);
-      setServiceForm({ title: '', description: '', imageUrl: '', icon: 'CheckCircle', orderIndex: 0 });
+      setServiceForm({ title: '', description: '', imageUrl: '', icon: 'CheckCircle', iconPhotoUrl: '', orderIndex: 0 });
     } catch (error) {
       console.error('Error saving service:', error);
       alert('Failed to save service');
@@ -106,6 +111,49 @@ export function AdminContentEditor() {
     { value: 'Shield', label: 'Shield', icon: Shield },
     { value: 'CheckCircle', label: 'Check Circle', icon: CheckCircle }
   ];
+
+  const handleIconPhotoUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file');
+      return;
+    }
+
+    setUploadingIcon(true);
+    try {
+      const directLink = await uploadToPostimages(file);
+
+      const removeBgApiKey = import.meta.env.VITE_REMOVE_BG_API_KEY;
+      if (removeBgApiKey) {
+        const formData = new FormData();
+        formData.append('image_url', directLink);
+        formData.append('size', 'auto');
+
+        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+          method: 'POST',
+          headers: {
+            'X-Api-Key': removeBgApiKey,
+          },
+          body: formData
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const noBgFile = new File([blob], 'icon-no-bg.png', { type: 'image/png' });
+          const noBgLink = await uploadToPostimages(noBgFile);
+          setServiceForm({ ...serviceForm, iconPhotoUrl: noBgLink });
+        } else {
+          setServiceForm({ ...serviceForm, iconPhotoUrl: directLink });
+        }
+      } else {
+        setServiceForm({ ...serviceForm, iconPhotoUrl: directLink });
+      }
+    } catch (error) {
+      console.error('Error uploading icon:', error);
+      alert('Failed to upload icon');
+    } finally {
+      setUploadingIcon(false);
+    }
+  };
 
   return (
     <div className="space-y-12">
@@ -200,7 +248,7 @@ export function AdminContentEditor() {
           <button
             onClick={() => {
               setEditingService(null);
-              setServiceForm({ title: '', description: '', imageUrl: '', icon: 'CheckCircle', orderIndex: services.length + 1 });
+              setServiceForm({ title: '', description: '', imageUrl: '', icon: 'CheckCircle', iconPhotoUrl: '', orderIndex: services.length + 1 });
               setShowServiceModal(true);
             }}
             className="flex items-center gap-2 bg-[#3d4f5c] text-white px-4 py-2 rounded-lg hover:bg-[#2d3f4c] transition"
@@ -233,6 +281,7 @@ export function AdminContentEditor() {
                         description: service.description,
                         imageUrl: service.imageUrl,
                         icon: service.icon,
+                        iconPhotoUrl: service.iconPhotoUrl || '',
                         orderIndex: service.orderIndex
                       });
                       setShowServiceModal(true);
@@ -347,7 +396,7 @@ export function AdminContentEditor() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Icon</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Icon Type</label>
                 <select
                   value={serviceForm.icon}
                   onChange={(e) => setServiceForm({ ...serviceForm, icon: e.target.value })}
@@ -359,6 +408,56 @@ export function AdminContentEditor() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Custom Icon Photo (Optional)</label>
+                <input
+                  ref={iconFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleIconPhotoUpload(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                />
+                {serviceForm.iconPhotoUrl ? (
+                  <div className="space-y-2">
+                    <img src={serviceForm.iconPhotoUrl} alt="Icon" className="h-20 w-20 object-contain border border-gray-200 rounded-lg" />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => iconFileInputRef.current?.click()}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+                      >
+                        Change Icon
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setServiceForm({ ...serviceForm, iconPhotoUrl: '' })}
+                        className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => iconFileInputRef.current?.click()}
+                    disabled={uploadingIcon}
+                    className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-[#3d4f5c] transition text-gray-600 hover:text-[#3d4f5c]"
+                  >
+                    {uploadingIcon ? (
+                      <div className="w-4 h-4 border-2 border-[#3d4f5c] border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <ImageIcon className="w-5 h-5" />
+                    )}
+                    {uploadingIcon ? 'Uploading...' : 'Upload Custom Icon'}
+                  </button>
+                )}
+                <p className="text-xs text-gray-500 mt-1">Background will be automatically removed if API key is configured</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Order Index</label>
@@ -382,6 +481,7 @@ export function AdminContentEditor() {
                   onClick={() => {
                     setShowServiceModal(false);
                     setEditingService(null);
+                    setServiceForm({ title: '', description: '', imageUrl: '', icon: 'CheckCircle', iconPhotoUrl: '', orderIndex: 0 });
                   }}
                   className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
                 >
